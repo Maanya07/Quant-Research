@@ -130,6 +130,40 @@ class TestMerge(unittest.TestCase):
         self.assertAlmostEqual(out.loc[out["date"] == "2020-10-13", "div"].iloc[0], 0.30)
         self.assertAlmostEqual(out["div"].sum(), 0.30)
 
+    def test_dividends_before_sample_start_are_not_piled_onto_first_day(self):
+        close, nav, _ = self._inputs()
+        divs = pd.Series([0.50, 0.40, 0.30],
+                         index=pd.to_datetime(["2002-09-03", "2020-10-08", "2020-10-13"]))
+        out = md.merge_fund("TEST", close, nav, divs, holidays=set())
+        self.assertAlmostEqual(out["div"].iloc[0], 0.0)
+        self.assertAlmostEqual(out["div"].sum(), 0.30)
+
+
+class TestCorrections(unittest.TestCase):
+    def test_excluded_close_stays_out_even_when_a_nav_exists_for_that_date(self):
+        dates = pd.to_datetime(["2026-11-17", "2026-11-18", "2026-11-19"])
+        close = pd.Series([103.0, 103.15, 103.035], index=dates)
+        nav = pd.DataFrame({"date": dates, "nav": [103.0, 103.12, 103.05]})  # NAV supplied later
+        excl = pd.DataFrame({"ticker": ["LQD", "HYG"], "date": pd.to_datetime(["2026-11-19", "2026-11-18"])})
+        kept = md.apply_price_exclusions(close, "LQD", excl)
+        out = md.merge_fund("LQD", kept, nav, pd.Series(dtype=float), holidays=set())
+        self.assertEqual(list(out["date"]), list(dates[:2]))  # other tickers' exclusions ignored
+
+    def test_dividend_supplement_fills_gap_without_double_counting(self):
+        cache = pd.Series([0.208517, 0.225735], index=pd.to_datetime(["2016-02-01", "2016-05-02"]))
+        supp = pd.DataFrame({"ticker": ["SHYG", "SHYG", "LQD"],
+                             "ex_date": pd.to_datetime(["2016-03-01", "2016-05-02", "2016-03-01"]),
+                             "amount": [0.209028, 9.99, 1.0]})
+        out = md.apply_dividend_supplements(cache, "SHYG", supp)
+        self.assertEqual(len(out), 3)
+        self.assertAlmostEqual(out[pd.Timestamp("2016-03-01")], 0.209028)
+        self.assertAlmostEqual(out[pd.Timestamp("2016-05-02")], 0.225735)  # cache value kept
+
+    def test_missing_corrections_file_means_no_corrections(self):
+        with tempfile.TemporaryDirectory() as d:
+            df = md.load_corrections(Path(d) / "nope.csv", "date")
+        self.assertTrue(df.empty)
+
 
 class TestEvents(unittest.TestCase):
     def test_first_day_of_cluster_flagged_and_spacing_enforced(self):
@@ -144,6 +178,28 @@ class TestEvents(unittest.TestCase):
         out = md.flag_events(panel, pct=0.10, min_gap=5)
         flagged = list(np.flatnonzero(out["event"].to_numpy()))
         self.assertEqual(flagged, [10, 20])
+
+    def test_one_event_per_continuous_episode(self):
+        # One unbroken 20-day run below the cutoff is one episode: only its first day is an
+        # event, not every fifth session inside the run.
+        n = 60
+        disc = np.zeros(n)
+        disc[10:30] = -0.02          # continuous episode -> only day 10
+        disc[33] = -0.02             # new episode starting 23 sessions after day 10 -> flagged
+        disc[36:45] = -0.02          # starts only 3 sessions after day 33 -> blocked, and no
+                                     # later day of this episode becomes an event either
+        disc[50] = -0.02             # new episode, far enough -> flagged
+        panel = pd.DataFrame({"ticker": "A",
+                              "date": pd.bdate_range("2021-01-01", periods=n),
+                              "discount": disc})
+        out = md.flag_events(panel, pct=0.5, min_gap=5)   # cutoff = -2%
+        self.assertEqual(list(np.flatnonzero(out["event"].to_numpy())), [10, 33, 50])
+
+    def test_event_output_is_labelled_provisional(self):
+        panel = pd.DataFrame({"ticker": "A", "date": pd.bdate_range("2021-01-01", periods=20),
+                              "discount": np.linspace(-0.01, 0.01, 20)})
+        out = md.flag_events(panel, pct=0.05, min_gap=5)
+        self.assertTrue((out["event_status"] == "provisional").all())
 
     def test_threshold_is_computed_within_each_fund(self):
         dates = pd.bdate_range("2021-01-01", periods=20)

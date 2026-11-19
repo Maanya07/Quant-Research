@@ -1,0 +1,47 @@
+VALIDATION REPORT
+============================================================
+Events are PROVISIONAL: first day of each episode at or below the fund's
+full-sample 5% discount quantile, >= 5 sessions apart. Rule and
+threshold pending specification agreement.
+============================================================
+EMB: 2015-01-02 to 2026-11-18, 2966 days, 90 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -7.72% on 2020-03-18 | event cutoff: -0.16%
+HYG: 2015-01-02 to 2026-11-18, 2966 days, 86 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -1.28% on 2020-03-20 | event cutoff: -0.21%
+IEF: 2015-01-02 to 2026-11-18, 2966 days, 93 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -1.08% on 2020-03-11 | event cutoff: -0.05%
+IGSB: 2015-01-02 to 2026-11-18, 2966 days, 74 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -6.93% on 2020-03-19 | event cutoff: -0.04%
+LQD: 2015-01-02 to 2026-11-18, 2966 days, 80 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -5.08% on 2020-03-19 | event cutoff: -0.12%
+MUB: 2015-01-02 to 2026-11-18, 2966 days, 76 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -5.77% on 2020-03-18 | event cutoff: -0.14%
+SHY: 2015-01-02 to 2026-11-18, 2966 days, 101 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -0.11% on 2025-04-04 | event cutoff: -0.01%
+SHYG: 2015-01-02 to 2026-11-18, 2966 days, 75 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -1.59% on 2020-03-20 | event cutoff: -0.12%
+TLT: 2015-01-02 to 2026-11-18, 2966 days, 88 events
+   duplicate dates: 0 | missing values: 0 | days with |gap| > 10%: 0
+   worst discount: -4.98% on 2020-03-11 | event cutoff: -0.16%
+============================================================
+LQD on 2020-03-19: -5.08%  (expect roughly -5%)
+============================================================
+Corrections and warnings (data/corrections/):
+   SHY: 1 cached close(s) excluded per price_exclusions.csv
+   IEF: 1 cached close(s) excluded per price_exclusions.csv
+   TLT: 1 cached close(s) excluded per price_exclusions.csv
+   LQD: 1 cached close(s) excluded per price_exclusions.csv
+   IGSB: 1 cached close(s) excluded per price_exclusions.csv
+   HYG: 1 cached close(s) excluded per price_exclusions.csv
+   SHYG: 1 cached close(s) excluded per price_exclusions.csv
+   SHYG: 2 distribution(s) added per dividend_supplements.csv
+   MUB: 1 cached close(s) excluded per price_exclusions.csv
+   EMB: 1 cached close(s) excluded per price_exclusions.csv
