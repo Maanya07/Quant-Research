@@ -7,14 +7,16 @@ What it does
   3. Joins price and NAV by date, drops bond-market holidays, moves any dividend that
      falls on a dropped day to the next trading day.
   4. Computes the daily discount (close / NAV - 1) and log gap (ln(close / NAV)).
-  5. Flags "large discount" events: bottom 5% of each fund's own history, first day of
-     each cluster, events at least 5 trading days apart.
+  5. Flags "large discount" events (PROVISIONAL): bottom 5% of each fund's own history,
+     first day of each continuous episode, events at least 5 trading days apart.
   6. Writes a validation report and one discount chart per fund.
 
 Folder layout (relative to where you run it)
   data/raw/nav/      one iShares download per fund, RENAMED to start with the ticker,
                      e.g. LQD.xls, HYG.xlsx, or LQD.csv if you re-saved it
   data/raw/prices/   filled automatically with cached yfinance pulls
+  data/corrections/  documented fixes applied at processing time (raw files stay untouched):
+                     price_exclusions.csv, dividend_supplements.csv
   data/clean/        outputs: panel.csv, events.csv, validation_report.txt
   figures/           outputs: discount_<TICKER>.png
 
@@ -39,6 +41,7 @@ TICKERS = ["SHY", "IEF", "TLT", "LQD", "IGSB", "HYG", "SHYG", "MUB", "EMB"]
 START = "2015-01-01"
 EVENT_PCT = 0.05   # "large discount" = bottom 5% of a fund's own discount history
 MIN_GAP = 5        # events at least 5 trading days apart
+EVENT_STATUS = "provisional"   # event rule/threshold not yet agreed (see docs/spec_comparison.md)
 
 SS_NS = "urn:schemas-microsoft-com:office:spreadsheet"
 
@@ -165,6 +168,38 @@ def fetch_prices(ticker: str, start: str, cache_dir: Path, offline: bool):
     return close, divs
 
 
+# --------------------------------------------------------------------------- corrections
+# Documented corrections live in data/corrections/ and are applied here, at processing
+# time. The raw caches in data/raw/ are never edited.
+
+def load_corrections(path: Path, date_col: str) -> pd.DataFrame:
+    """Read a corrections CSV (ticker + date column + notes); empty frame if absent."""
+    if not path.exists():
+        return pd.DataFrame(columns=["ticker", date_col])
+    df = pd.read_csv(path, dtype={"ticker": str})
+    df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
+    return df
+
+
+def apply_price_exclusions(close: pd.Series, ticker: str, exclusions: pd.DataFrame) -> pd.Series:
+    """Drop listed (ticker, date) closes so they can never enter the merge, even if a
+    NAV for that date is supplied later."""
+    bad = set(exclusions.loc[exclusions["ticker"] == ticker, "date"])
+    return close[~pd.DatetimeIndex(close.index).normalize().isin(bad)]
+
+
+def apply_dividend_supplements(divs: pd.Series, ticker: str, supplements: pd.DataFrame) -> pd.Series:
+    """Add verified distributions missing from the cache. An ex-date the cache already
+    has is left alone, so a later re-pull that fills the gap cannot double count."""
+    divs = normalize_dividends(divs)
+    add = supplements[supplements["ticker"] == ticker]
+    add = add[~add["ex_date"].isin(divs.index)]
+    if add.empty:
+        return divs
+    extra = pd.Series(add["amount"].astype(float).to_numpy(), index=pd.DatetimeIndex(add["ex_date"]), name="div")
+    return pd.concat([divs, extra]).groupby(level=0).sum().rename("div")
+
+
 # --------------------------------------------------------------------------- calendar
 
 def bond_market_holidays(start_year: int, end_year: int) -> set[pd.Timestamp]:
@@ -202,7 +237,11 @@ def merge_fund(ticker: str, close: pd.Series, nav: pd.DataFrame, divs: pd.Series
     # so a dividend on a dropped day is not silently lost.
     df["div"] = 0.0
     dates = df["date"].to_numpy()
+    # Ex-dates before the first merged day are outside the sample: skip them rather than
+    # letting searchsorted pile every earlier dividend onto row 0.
     for d, amt in normalize_dividends(divs).items():
+        if len(dates) == 0 or np.datetime64(d) < dates[0]:
+            continue
         i = np.searchsorted(dates, np.datetime64(d))
         if i < len(df):
             df.loc[i, "div"] += float(amt)
@@ -216,33 +255,40 @@ def merge_fund(ticker: str, close: pd.Series, nav: pd.DataFrame, divs: pd.Series
 # --------------------------------------------------------------------------- events
 
 def flag_events(panel: pd.DataFrame, pct: float = EVENT_PCT, min_gap: int = MIN_GAP) -> pd.DataFrame:
-    """Flag large-discount events within each fund.
+    """Flag large-discount events within each fund. PROVISIONAL pending the agreed spec.
 
     A day is a candidate if its discount is at or below the fund's own `pct` quantile.
-    The first candidate in a cluster is the event; the next event must be at least
-    `min_gap` trading days later.
+    An episode is an unbroken run of candidate rows; only its first day can be an event,
+    and only if it is at least `min_gap` rows (trading days in the panel) after the
+    previous event. A run starting too soon produces no event at all; later days of the
+    same run never fire. The first row of the sample counts as an episode start.
     """
     out = []
     for _, g in panel.sort_values(["ticker", "date"]).groupby("ticker", sort=False):
         g = g.copy()
         thr = g["discount"].quantile(pct)
         cand = (g["discount"] <= thr).to_numpy()
+        starts = cand & ~np.r_[False, cand[:-1]]
         event = np.zeros(len(g), dtype=bool)
         last = -10**9
-        for i, c in enumerate(cand):
-            if c and i - last >= min_gap:
+        for i in np.flatnonzero(starts):
+            if i - last >= min_gap:
                 event[i] = True
                 last = i
         g["event_threshold"] = thr
         g["event"] = event
+        g["event_status"] = EVENT_STATUS
         out.append(g)
     return pd.concat(out).reset_index(drop=True)
 
 
 # --------------------------------------------------------------------------- checks + plots
 
-def validation_report(panel: pd.DataFrame) -> str:
-    lines = ["VALIDATION REPORT", "=" * 60]
+def validation_report(panel: pd.DataFrame, notes: list[str] | None = None) -> str:
+    lines = ["VALIDATION REPORT", "=" * 60,
+             f"Events are {EVENT_STATUS.upper()}: first day of each episode at or below the fund's",
+             f"full-sample {EVENT_PCT:.0%} discount quantile, >= {MIN_GAP} sessions apart. Rule and",
+             "threshold pending specification agreement.", "=" * 60]
     for t, g in panel.groupby("ticker"):
         worst = g.loc[g["discount"].idxmin()]
         lines += [
@@ -260,6 +306,8 @@ def validation_report(panel: pd.DataFrame) -> str:
         lines.append(f"LQD on 2020-03-19: {lqd['discount'].iloc[0]:.2%}  (expect roughly -5%)")
     else:
         lines.append("LQD on 2020-03-19: not in data, so the March 2020 check could not run")
+    if notes:
+        lines += ["=" * 60, "Corrections and warnings (data/corrections/):"] + [f"   {n}" for n in notes]
     return "\n".join(lines)
 
 
@@ -274,7 +322,7 @@ def plot_discounts(panel: pd.DataFrame, fig_dir: Path) -> None:
         ax.plot(g["date"], g["discount"] * 100, lw=0.8, label="Premium / discount")
         ev = g[g["event"]]
         ax.scatter(ev["date"], ev["discount"] * 100, s=12, color="crimson", zorder=3,
-                   label="Large-discount event")
+                   label=f"Large-discount event ({EVENT_STATUS})")
         ax.axhline(0, color="grey", lw=0.6)
         ax.set_title(f"{t}: closing price vs NAV")
         ax.set_ylabel("% (negative = discount)")
@@ -305,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
     nav_dir, price_dir = root / "data/raw/nav", root / "data/raw/prices"
     clean_dir, fig_dir = root / "data/clean", root / "figures"
     clean_dir.mkdir(parents=True, exist_ok=True)
+    corr_dir = root / "data/corrections"
+    price_excl = load_corrections(corr_dir / "price_exclusions.csv", "date")
+    div_supp = load_corrections(corr_dir / "dividend_supplements.csv", "ex_date")
+    notes: list[str] = []
 
     frames = []
     for t in TICKERS:
@@ -315,6 +367,23 @@ def main(argv: list[str] | None = None) -> int:
         nav = load_ishares_nav(nav_path)
         nav = nav[nav["date"] >= pd.Timestamp(args.start)]
         close, divs = fetch_prices(t, args.start, price_dir, args.offline)
+
+        n_close = len(close)
+        close = apply_price_exclusions(close, t, price_excl)
+        if len(close) < n_close:
+            notes.append(f"{t}: {n_close - len(close)} cached close(s) excluded per price_exclusions.csv")
+        pulled = price_dir / f"{t}_pulled_on.txt"
+        if pulled.exists() and len(close) and close.index.max() >= pd.Timestamp(pulled.read_text().strip()):
+            msg = (f"WARNING {t}: cached close on {close.index.max().date()} is dated on/after the pull "
+                   f"date and may be intraday; add it to data/corrections/price_exclusions.csv if so")
+            print(msg)
+            notes.append(msg)
+
+        n_div = len(normalize_dividends(divs))
+        divs = apply_dividend_supplements(divs, t, div_supp)
+        if len(divs) > n_div:
+            notes.append(f"{t}: {len(divs) - n_div} distribution(s) added per dividend_supplements.csv")
+
         years = (min(nav["date"].min(), close.index.min()).year,
                  max(nav["date"].max(), close.index.max()).year)
         frames.append(merge_fund(t, close, nav, divs, bond_market_holidays(*years)))
@@ -327,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     panel = flag_events(pd.concat(frames, ignore_index=True))
     panel.to_csv(clean_dir / "panel.csv", index=False)
     panel[panel["event"]].to_csv(clean_dir / "events.csv", index=False)
-    report = validation_report(panel)
+    report = validation_report(panel, notes)
     (clean_dir / "validation_report.txt").write_text(report)
     plot_discounts(panel, fig_dir)
 

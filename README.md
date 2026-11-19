@@ -11,6 +11,8 @@ mkdir -p data/raw/nav
 2. Rename each one so it starts with the ticker: `LQD.xls`, `HYG.xls`, ...
 3. Put all 9 in `data/raw/nav/`. Don't edit them; the script reads them as-is.
    If a file won't open, re-save it from Excel as CSV with the same name (`LQD.csv`).
+4. Documented fixes in `data/corrections/` (excluded prices, verified missing distributions)
+   are applied automatically at processing time; raw files are never edited. See its README.
 
 ## Run
 ```

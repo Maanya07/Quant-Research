@@ -1,0 +1,10 @@
+ticker,date,cached_close,cache_file,reason,evidence,added_on
+SHY,2026-11-19,81.34500122070312,data/raw/prices/SHY_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+IEF,2026-11-19,90.66999816894531,data/raw/prices/IEF_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+TLT,2026-11-19,80.16999816894531,data/raw/prices/TLT_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+LQD,2026-11-19,103.03500366210938,data/raw/prices/LQD_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+IGSB,2026-11-19,51.29499816894531,data/raw/prices/IGSB_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+HYG,2026-11-19,76.68499755859375,data/raw/prices/HYG_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+SHYG,2026-11-19,40.84000015258789,data/raw/prices/SHYG_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+MUB,2026-11-19,103.12000274658203,data/raw/prices/MUB_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
+EMB,2026-11-19,90.44499969482422,data/raw/prices/EMB_close.csv,incomplete session: cache pulled 2026-11-19 before the 4pm ET close,pulled_on.txt = 2026-11-19; cache commit 1bcf1c4 by OmPatel17 at 2026-11-19 12:44:43 -0500,2026-11-19
